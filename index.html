@@ -175,7 +175,12 @@
             </div>
         </div>
 
-        <button class="btn" onclick="window.print()">📥 Exportar PDF Vectorial</button>
+        <div style="display: flex; gap: 10px; margin-top: auto;">
+            <button class="btn" style="flex: 1; margin-top: 0; background: #64748b; color: white;" onclick="saveProject()">💾 Guardar .asm</button>
+            <button class="btn" style="flex: 1; margin-top: 0; background: #64748b; color: white;" onclick="document.getElementById('fi-load').click()">📂 Cargar .asm</button>
+            <input type="file" id="fi-load" style="display:none" accept=".asm,.json" onchange="loadProject(event)">
+        </div>
+        <button class="btn" onclick="window.print()" style="margin-top: 0;">📥 Exportar PDF Vectorial</button>
     </div>
 
     <!-- PREVISUALIZACION -->
@@ -300,19 +305,23 @@
         function previewImg(event, imgId) {
             const file = event.target.files[0];
             if(file) {
-                const img = document.getElementById(imgId);
-                img.src = URL.createObjectURL(file);
-                img.style.display = 'block';
-                
-                if(img.parentElement.querySelector('.upload-hint')) {
-                    img.parentElement.querySelector('.upload-hint').style.display = 'none';
-                }
-                if(imgId === 'img-montaje') {
-                    document.getElementById('btn-montaje-overlay').style.display = 'none';
-                }
-                if(imgId === 'img-exp') {
-                    document.getElementById('hint-exp').style.display = 'none';
-                }
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById(imgId);
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    
+                    if(img.parentElement.querySelector('.upload-hint')) {
+                        img.parentElement.querySelector('.upload-hint').style.display = 'none';
+                    }
+                    if(imgId === 'img-montaje') {
+                        document.getElementById('btn-montaje-overlay').style.display = 'none';
+                    }
+                    if(imgId === 'img-exp') {
+                        document.getElementById('hint-exp').style.display = 'none';
+                    }
+                };
+                reader.readAsDataURL(file);
             }
         }
 
@@ -421,6 +430,195 @@
                     document.removeEventListener('mouseup', cleanup);
                 });
             });
+        }
+
+        function saveProject() {
+            // 1. Inputs de Texto
+            const inputs = {
+                title: document.getElementById('g-title').value,
+                suffix: document.getElementById('g-suffix').value,
+                prop: document.getElementById('g-prop').value
+            };
+
+            // 2. Imágenes (Guardadas en Base64 desde el atributo src)
+            const images = {
+                montaje: document.getElementById('img-montaje').src, 
+                flat: document.getElementById('img-flat').src,
+                desc: document.getElementById('img-desc').src,
+                exp: document.getElementById('img-exp').src
+            };
+            // Limpiamos los src que no sean Base64 (ej. cuando están vacíos o referencian una ruta externa inicial)
+            Object.keys(images).forEach(k => {
+                if (!images[k] || !images[k].startsWith('data:')) {
+                    images[k] = '';
+                }
+            });
+
+            // 3. Posición de Paneo (Montaje)
+            const montageObjPos = document.getElementById('img-montaje').style.objectPosition || '';
+
+            // 4. Estado de la "Caja Inteligente (Smart Dimension)"
+            const smartBoxEl = document.getElementById('draggable-smart-box');
+            const smartPropEl = document.querySelector('.smart-content-prop');
+            const smartBox = {
+                position: smartBoxEl.style.position || '',
+                left: smartBoxEl.style.left || '',
+                top: smartBoxEl.style.top || '',
+                margin: smartBoxEl.style.margin || '',
+                propWidth: smartPropEl.style.width || '',
+                propHeight: smartPropEl.style.height || ''
+            };
+
+            // 5. Textos Editables Estáticos (Excluye balas del Canvas Explosivo para no duplicar data)
+            const staticEdits = [];
+            document.querySelectorAll('[contenteditable="true"]').forEach(el => {
+                if (!el.closest('.free-text')) {
+                    staticEdits.push(el.innerHTML);
+                }
+            });
+
+            // 6. Balas Dinámicas (Canvas Explosivo)
+            const bullets = [];
+            document.querySelectorAll('.free-text').forEach(bullet => {
+                bullets.push({
+                    left: bullet.style.left,
+                    top: bullet.style.top,
+                    html: bullet.innerHTML 
+                });
+            });
+
+            const projectData = {
+                inputs,
+                images,
+                montageObjPos,
+                smartBox,
+                staticEdits,
+                bullets,
+                bulletCounter
+            };
+
+            const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `${inputs.title}_${inputs.suffix}.asm`; 
+            a.click();
+        }
+
+        function loadProject(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    // 1. Restaurar Inputs Globales
+                    if (data.inputs) {
+                        document.getElementById('g-title').value = data.inputs.title || '';
+                        document.getElementById('g-suffix').value = data.inputs.suffix || '';
+                        document.getElementById('g-prop').value = data.inputs.prop || '';
+                        
+                        // Refrescar inputs visualmente disparando eventos 
+                        ['g-title', 'g-suffix', 'g-prop'].forEach(id => {
+                            let el = document.getElementById(id);
+                            el.dispatchEvent(new Event('input'));
+                            el.dispatchEvent(new Event('keyup'));
+                        });
+                    }
+
+                    // 2. Restaurar Imágenes
+                    if (data.images) {
+                        const imgMap = {
+                            montaje: 'img-montaje',
+                            flat: 'img-flat',
+                            desc: 'img-desc',
+                            exp: 'img-exp'
+                        };
+                        for (const key in imgMap) {
+                            if (data.images[key] && data.images[key].startsWith('data:')) {
+                                const img = document.getElementById(imgMap[key]);
+                                img.src = data.images[key];
+                                img.style.display = 'block';
+                                
+                                // Ocultar hints
+                                if(img.parentElement.querySelector('.upload-hint')) {
+                                    img.parentElement.querySelector('.upload-hint').style.display = 'none';
+                                }
+                                if(imgMap[key] === 'img-montaje') {
+                                    document.getElementById('btn-montaje-overlay').style.display = 'none';
+                                }
+                                if(imgMap[key] === 'img-exp') {
+                                    document.getElementById('hint-exp').style.display = 'none';
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. Restaurar Paneo
+                    if (data.montageObjPos) {
+                        document.getElementById('img-montaje').style.objectPosition = data.montageObjPos;
+                    }
+
+                    // 4. Restaurar Caja Inteligente
+                    if (data.smartBox) {
+                        const smartBoxEl = document.getElementById('draggable-smart-box');
+                        const smartPropEl = document.querySelector('.smart-content-prop');
+                        
+                        smartBoxEl.style.position = data.smartBox.position || '';
+                        smartBoxEl.style.left = data.smartBox.left || '';
+                        smartBoxEl.style.top = data.smartBox.top || '';
+                        smartBoxEl.style.margin = data.smartBox.margin || '';
+                        smartPropEl.style.width = data.smartBox.propWidth || '100%';
+                        smartPropEl.style.height = data.smartBox.propHeight || 'auto';
+                    }
+
+                    // 5. Restaurar Textos Editables Estáticos
+                    if (data.staticEdits) {
+                        let i = 0;
+                        document.querySelectorAll('[contenteditable="true"]').forEach(el => {
+                            if (!el.closest('.free-text') && i < data.staticEdits.length) {
+                                el.innerHTML = data.staticEdits[i];
+                                i++;
+                            }
+                        });
+                    }
+
+                    // 6. Restaurar Balas Dinámicas en Canvas Explosivo
+                    if (data.bullets) {
+                        const canvasExp = document.getElementById('canvas-exp');
+                        // Remover balas existentes
+                        canvasExp.querySelectorAll('.free-text').forEach(b => b.remove());
+                        
+                        data.bullets.forEach(bData => {
+                            const bullet = document.createElement('div');
+                            bullet.className = 'free-text';
+                            bullet.style.left = bData.left;
+                            bullet.style.top = bData.top;
+                            bullet.innerHTML = bData.html;
+                            canvasExp.appendChild(bullet);
+                            // Re-conectar los handlers de arrastre (drag)
+                            initDragBullet(bullet);
+                        });
+                    }
+
+                    // 7. Restaurar Contador
+                    if (data.bulletCounter !== undefined) {
+                        bulletCounter = data.bulletCounter;
+                    }
+
+                    // Asegurarse de que toda la UI se actualice
+                    updateUI(); 
+                    
+                } catch(err) {
+                    console.error("Error cargando proyecto:", err);
+                    alert("El archivo no es válido o está corrupto.");
+                }
+                
+                // Limpiar input file para permitir la misma subida
+                event.target.value = '';
+            };
+            reader.readAsText(file);
         }
 
         updateUI();
