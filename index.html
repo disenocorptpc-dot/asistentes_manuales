@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asistente de Manuales</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-app: #0f172a; --panel-bg: #1e293b; --primary: #38bdf8; --text-main: #f8fafc;
+            --doc-bg: #ececec; --doc-blue: #234b6b; --doc-text: #3f3f46;
+        }
+
+        body { margin: 0; padding: 0; font-family: 'Inter', sans-serif; background: var(--bg-app); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- MENÚ LATERAL --- */
+        .sidebar { width: 350px; background: var(--panel-bg); border-right: 1px solid rgba(255,255,255,0.05); padding: 2rem; display: flex; flex-direction: column; gap: 1.5rem; overflow-y: auto; box-shadow: 10px 0 30px rgba(0,0,0,0.5); z-index: 10; }
+        .sidebar h1 { font-size: 1.25rem; font-weight: 800; margin: 0 0 1rem 0; color: var(--primary); display: flex; align-items: center; gap: 10px; letter-spacing: -0.02em;}
+        .form-section { background: #0f172a; border: 1px solid rgba(255,255,255,0.05); padding: 1.2rem; border-radius: 10px; display: flex; flex-direction: column; gap: 1rem; }
+        .form-section h3 { margin: 0; font-size: 0.8rem; color: var(--primary); text-transform: uppercase; letter-spacing: 0.1em; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 8px; }
+        .form-group { display: flex; flex-direction: column; gap: 0.4rem; }
+        .form-group label { font-size: 0.8rem; font-weight: 600; color: #94a3b8; }
+        .form-group input { background: #1e293b; border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; padding: 0.8rem; color: white; font-family: 'Inter', sans-serif; }
+        .info-card { background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.2); padding: 1rem; border-radius: 8px; font-size: 0.85rem; color: #e0f2fe; line-height: 1.5; }
+        .btn { background: var(--primary); color: #0f172a; border: none; padding: 1rem; border-radius: 8px; font-weight: 800; cursor: pointer; text-transform: uppercase; transition: all 0.2s; margin-top: auto; }
+        .btn:hover { background: #7dd3fc; }
+
+        /* --- VISOR PDF MULTIPAGINA --- */
+        .preview-area { flex: 1; overflow-y: auto; background: #0f172a; padding: 3rem; display: flex; justify-content: center; }
+        .pages-container { display: flex; flex-direction: column; gap: 3rem; transform-origin: top center; zoom: 0.75; }
+
+        /* --- PÁGINA FIX EXACTO --- */
+        .page { 
+            width: 1056px !important; height: 816px !important; 
+            min-height: 816px !important; max-height: 816px !important; 
+            box-sizing: border-box;
+            background: var(--doc-bg); box-shadow: 0 25px 50px rgba(0,0,0,0.8); position: relative; overflow: hidden; flex-shrink: 0; 
+        }
+        .page-inner { background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.01) 0px, rgba(0,0,0,0.01) 2px, transparent 2px, transparent 10px); }
+
+        /* --- INTERACCIÓN CANVA --- */
+        [contenteditable="true"] { outline: none; transition: all 0.2s; border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
+        [contenteditable="true"]:hover { background: rgba(56, 189, 248, 0.15); box-shadow: 0 0 0 1px #38bdf8 dashed; cursor: text; }
+        [contenteditable="true"]:focus { background: white; color: black !important; box-shadow: 0 0 0 2px #38bdf8; z-index: 50; position:relative;}
+
+        .upload-zone { border: 2px dashed rgba(0,0,0,0.2); background: rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; flex-direction: column; color: #64748b; font-weight: 600; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.2s; box-sizing: border-box;}
+        .upload-zone:hover { border-color: var(--primary); }
+        .upload-zone img { position: absolute; top:0; left:0; width:100%; height:100%; object-fit: cover; display: none; z-index: 5; }
+        .upload-zone img.contain { object-fit: contain; }
+        .upload-hint { position: relative; z-index: 1; font-size: 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; text-align:center;}
+        
+        /* GUIAS SMART RESIZABLES Y ARRASTRABLES */
+        .smart-box { position: relative; margin-top: auto; margin-left: 20px; z-index: 20;}
+        .smart-box:hover .drag-handle-box { opacity: 1; }
+        .drag-handle-box { position: absolute; top: -25px; left: 0; cursor: grab; font-size: 11px; font-weight: 800; color: white; background: var(--doc-blue); border-radius: 4px; padding: 3px 6px; opacity: 0; transition: opacity 0.2s; }
+        
+        .smart-content-prop { 
+            width: 100%; /* Ancho completo por defecto como se pidio */
+            height: auto; min-height: 80px; max-width: 400px; max-height: 350px;
+            resize: horizontal; 
+            overflow: hidden; border: 1px dashed rgba(0,0,0,0.3); background: transparent; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; flex-direction: column;
+        }
+        .smart-content-prop img { width: 100%; height: auto; max-height: 100%; display: block; object-fit: contain; }
+        
+        .smart-v-line { position: absolute; left: -20px; top: 0; bottom: 0; width: 2px; background: #ef4444; pointer-events: none;}
+        .smart-v-line::before, .smart-v-line::after { content: ''; position:absolute; width: 10px; height: 2px; background: #ef4444; left: -4px;}
+        .smart-v-line::before {top:0;} .smart-v-line::after {bottom:0;}
+        .smart-h-line { position: absolute; left: 0; right: 0; bottom: -20px; height: 2px; background: #ef4444; pointer-events: none;}
+        .smart-h-line::before, .smart-h-line::after { content: ''; position:absolute; width: 2px; height: 10px; background: #ef4444; top: -4px;}
+        .smart-h-line::before {left:0;} .smart-h-line::after {right:0;}
+        
+        .smart-text-v { position: absolute; left: -45px; top: 50%; transform: translateY(-50%) rotate(-90deg); font-weight: 700; font-size: 13px; color: #1e293b; background: rgba(255,255,255,0.8); border-radius: 3px; padding: 0 5px; z-index:10;}
+        .smart-text-h { position: absolute; left: 50%; bottom: -30px; transform: translateX(-50%); font-weight: 700; font-size: 13px; color: #1e293b; background: rgba(255,255,255,0.8); border-radius: 3px; padding: 0 5px; z-index:10;}
+
+        /* BALAS LIBRES (EXPLOTADO) */
+        .free-text { display: flex; align-items: flex-start; gap: 8px; z-index: 50; position: absolute; transition: outline 0.2s;}
+        .free-text:hover { outline: 1px dashed rgba(0,0,0,0.2); }
+        .free-text:hover .drag-handle, .free-text:hover .ft-delete { opacity: 1; }
+        .drag-handle { cursor: grab; opacity: 0; color: #64748b; font-size: 16px; margin-top: 2px;}
+        .ft-circle { background: #ef4444; color: white; width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; flex-shrink: 0; }
+        .ft-desc { font-size: 13px; color: #1e293b; background: rgba(255,255,255,0.85); padding: 4px 8px; border-radius: 4px; min-width: 100px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); outline: none; border: 1px solid rgba(0,0,0,0.05);}
+        .ft-delete { cursor: pointer; color: red; font-size: 18px; line-height: 1; opacity: 0; padding: 0 5px; font-weight: bold;}
+
+        /* --- REUTILIZABLES --- */
+        .doc-header { position: absolute; top: 70px; left: 70px; z-index: 10; width: 60%;}
+        .doc-header h1 { color: var(--doc-blue); font-size: 26px; font-weight: 800; margin: 0; text-transform: uppercase; }
+        .doc-header h2 { color: #64748b; font-size: 15px; font-weight: 700; margin: 8px 0 0 0; text-transform: uppercase; letter-spacing: 0.02em; display: inline-block; }
+        .watermark { position: absolute; top: 15px; right: -20px; font-size: 140px; font-weight: 900; color: rgba(0,0,0,0.03); letter-spacing: -0.01em; z-index: 0; pointer-events:none;}
+        .doc-footer { position: absolute; bottom: 45px; left: 70px; right: 70px; display: flex; justify-content: space-between; border-top: 2px solid rgba(0,0,0,0.1); padding-top: 15px; font-size: 11px; font-weight: 800; color: #475569; z-index: 10; }
+
+        /* Pag 1: Portada */
+        .page-cover { background-color: var(--doc-blue); color: white; display: flex; align-items: center; justify-content: flex-start; padding-left: 70px; }
+        .cover-lines { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: repeating-linear-gradient(30deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 11px); z-index: 0; opacity: 0.8; pointer-events:none;}
+        .cover-text { position: relative; z-index: 2; width: 80%; }
+        .cover-text h1 { font-size: 65px; font-weight: 900; margin: 0; text-transform: uppercase; line-height: 1.1; letter-spacing: -0.02em; }
+        .cover-text h2 { font-size: 65px; font-weight: 900; margin: 0; text-transform: uppercase; color: #fff; line-height: 1.1; letter-spacing: -0.02em; }
+        .footer-cover { border-top-color: rgba(255,255,255,0.2) !important; color: white !important; }
+
+        /* Pag 2: Montaje (Full Bleed) */
+        .page-montaje { padding: 0 !important; }
+        .page-montaje .upload-zone { border: none !important; border-radius: 0; background: #cbd5e1; width: 100%; height: 100%; }
+        .page-montaje #img-montaje { object-position: 50% 50%; cursor: grab; }
+        .btn-cargar-montaje { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 15px 30px; background: rgba(0,0,0,0.6); color: white; border-radius: 8px; font-weight: bold; cursor: pointer; border: 2px solid rgba(255,255,255,0.8); z-index: 20; box-shadow: 0 10px 30px rgba(0,0,0,0.5); backdrop-filter: blur(5px);}
+        .btn-cargar-montaje:hover { background: rgba(0,0,0,0.8); border-color: #38bdf8; color: #38bdf8;}
+        .text-white-overlay { color: white !important; text-shadow: 0 4px 15px rgba(0,0,0,0.9), 0 0 50px rgba(0,0,0,0.8) !important; }
+        .border-white-overlay { border-top-color: rgba(255,255,255,0.4) !important; }
+
+        /* Pag 3: Descriptivo */
+        .layout-desc { display: flex; height: 100%; padding: 150px 70px 90px 70px; box-sizing: border-box; position: relative; z-index: 2; }
+        /* padding-bottom: 20px le da esa "tolerancia de 10px px por encima del footer" */
+        .desc-left { position: relative; width: 35%; display: flex; flex-direction: column; padding-right: 40px; padding-bottom: 20px;} 
+        .desc-right { width: 65%; padding: 10px;}
+        .formato-texto { font-size: 13.5px; line-height: 1.6; color: #475569; margin-top: 15px; padding-bottom: 20px; text-align: left; background: transparent; border: none; width: 100%; font-family: 'Inter'; resize: none;}
+
+        /* --- MODO IMPRESIÓN PDF PERFECTO --- */
+        @media print {
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            body { background: none; margin: 0; padding: 0; }
+            .sidebar { display: none !important; }
+            .preview-area { background: none; padding: 0; overflow: visible; display: block; }
+            .pages-container { zoom: 1 !important; transform: none !important; gap: 0; }
+            .page { 
+                box-shadow: none !important; margin: 0 !important; page-break-after: always; 
+                page-break-inside: avoid; width: 11in !important; height: 8.5in !important; 
+            }
+            .page-inner { background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.01) 0px, rgba(0,0,0,0.01) 2px, transparent 2px, transparent 10px) !important; background-color: var(--doc-bg) !important;}
+            .page-cover { background-color: var(--doc-blue) !important; }
+            .cover-lines { background-image: repeating-linear-gradient(30deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 11px) !important; }
+            
+            /* Ocultar UI de Edición en el PDF Final */
+            .upload-hint, .btn-cargar-montaje, .smart-content-prop::-webkit-resizer, .ft-delete, .drag-handle, .drag-handle-box { display: none !important; }
+            .smart-content-prop { border: none !important; }
+            .upload-zone { border: none !important; background: transparent !important; }
+            .free-text { outline: none !important; border: none !important; }
+            /* FORCE solid backgrounds and visible text for bullets, overrriding browser bugs */
+            .ft-desc { 
+                background: white !important; 
+                color: #1e293b !important; 
+                backdrop-filter: none !important; 
+                -webkit-backdrop-filter: none !important;
+                border: 1px solid rgba(0,0,0,0.1) !important;
+            }
+        }
+        @page { size: letter landscape; margin: 0; }
+    </style>
+</head>
+<body>
+
+    <!-- INPUTS OCULTOS -->
+    <input type="file" id="fi-montaje" style="display:none" onchange="previewImg(event, 'img-montaje')">
+    <input type="file" id="fi-flat" style="display:none" onchange="previewImg(event, 'img-flat')">
+    <input type="file" id="fi-desc" style="display:none" onchange="previewImg(event, 'img-desc')">
+    <input type="file" id="fi-exp" style="display:none" onchange="previewImg(event, 'img-exp')">
+
+    <!-- MENÚ LATERAL -->
+    <div class="sidebar">
+        <h1>Asistente de Manuales</h1>
+        
+        <div class="form-section">
+            <h3>DATOS GENÉRICOS (GLOBALES)</h3>
+            <div class="form-group">
+                <label>Título del Proyecto</label>
+                <input type="text" id="g-title" value="BAÑO DE HUESPEDES" onkeyup="updateUI()">
+            </div>
+            <div class="row">
+                <div class="form-group">
+                    <label>Sufijo / Variantes</label>
+                    <input type="text" id="g-suffix" value="BP" onkeyup="updateUI()">
+                </div>
+                <div class="form-group">
+                    <label>Propiedad (Footer)</label>
+                    <input type="text" id="g-prop" value="CORPORATIVO THG" onkeyup="updateUI()">
+                </div>
+            </div>
+        </div>
+
+        <button class="btn" onclick="window.print()">📥 Exportar PDF Vectorial</button>
+    </div>
+
+    <!-- PREVISUALIZACION -->
+    <div class="preview-area">
+        <div class="pages-container">
+            
+            <!-- P1: PORTADA -->
+            <div class="page page-cover">
+                <div class="cover-lines"></div>
+                <div class="cover-text">
+                    <h1>MANUALES PLANTILLA</h1>
+                    <h2 class="dyn-title">BAÑO DE HUESPEDES <span class="dyn-suffix">- BP</span></h2>
+                </div>
+                <div class="doc-footer footer-cover">
+                    <div contenteditable="true" spellcheck="false">DEPARTAMENTO DE DISEÑO GRÁFICO</div>
+                    <div class="dyn-prop">CORPORATIVO THG</div>
+                </div>
+            </div>
+
+            <!-- P2: MONTAJE FULL BLEED -->
+            <div class="page page-inner page-montaje">
+                <div class="btn-cargar-montaje" id="btn-montaje-overlay" onclick="document.getElementById('fi-montaje').click()">
+                    + Cargar Render de Montaje
+                </div>
+                <div class="upload-zone" style="position: absolute; top:0; left:0; width:100%; height:100%;">
+                    <img id="img-montaje" src="" alt="Montaje" style="display:none;">
+                </div>
+                <div class="doc-header" style="pointer-events: none;">
+                    <h1 class="dyn-title text-white-overlay" style="color:transparent !important;">_</h1>
+                    <h2 contenteditable="true" spellcheck="false" class="text-white-overlay" style="font-size: 30px; margin-top:-10px; pointer-events: auto;">MONTAJE</h2>
+                </div>
+                <div class="doc-footer border-white-overlay text-white-overlay" style="pointer-events: none;">
+                    <div contenteditable="true" spellcheck="false" style="pointer-events: auto;">DEPARTAMENTO DE DISEÑO GRÁFICO</div>
+                    <div class="dyn-prop">CORPORATIVO THG</div>
+                </div>
+            </div>
+
+            <!-- P3: DESCRIPTIVO / CAJA ARRASTRABLE -->
+            <div class="page page-inner">
+                <div class="watermark">DESCRIPTIVO</div>
+                <div class="doc-header">
+                    <h1 class="dyn-title">BAÑO DE HUESPEDES</h1>
+                    <h2 contenteditable="true" spellcheck="false">PROPUESTA DE DISEÑO</h2>
+                </div>
+                
+                <div class="layout-desc">
+                    <div class="desc-left" id="col-desc-left">
+                        <div style="font-size: 22px; font-weight: 800; color: #222;" contenteditable="true">Descriptivo</div>
+                        <div contenteditable="true" class="formato-texto" spellcheck="false">
+                            Madera sólida color avellana clara de 12 mm de espesor. El frente presenta un desbaste de 3 mm para la incrustación de íconos en acrílico de 12 mm...
+                        </div>
+                        
+                        <!-- Smart Dimension (Mantiene 100% de ancho del texto y margen libre de 10px con el footer por default) -->
+                        <div class="smart-box" id="draggable-smart-box">
+                            <div class="drag-handle-box">✥ Mover Libre</div>
+                            <div class="smart-v-line"></div><div class="smart-h-line"></div>
+                            <div class="smart-text-v" contenteditable="true">30 cm</div>
+                            <div class="smart-text-h" contenteditable="true">15 cm</div>
+                            
+                            <div class="smart-content-prop" onclick="document.getElementById('fi-flat').click()">
+                                <div class="upload-hint" style="font-size: 11px;">Clic para Vector Flat</div>
+                                <img id="img-flat" src="" style="display:none; object-fit: contain;">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="desc-right">
+                        <div class="upload-zone" style="height: 100%; width: 100%; border-radius: 6px; border-color: transparent;" onclick="document.getElementById('fi-desc').click()">
+                            <div class="upload-hint">Clic para Render Aislado</div>
+                            <img id="img-desc" src="" class="contain">
+                        </div>
+                    </div>
+                </div>
+                <div class="doc-footer">
+                    <div contenteditable="true" spellcheck="false">DEPARTAMENTO DE DISEÑO GRÁFICO</div>
+                    <div class="dyn-prop">CORPORATIVO THG</div>
+                </div>
+            </div>
+
+            <!-- P4: EXPLOTADO "CANVAS LIBRE" -->
+            <div class="page page-inner" style="position: relative;">
+                <div class="watermark">DESCRIPTIVO</div>
+                <div class="doc-header" style="z-index: 5;">
+                    <h1 class="dyn-title">BAÑO DE HUESPEDES</h1>
+                    <h2 contenteditable="true" spellcheck="false">EXPLOSIVO</h2>
+                </div>
+                
+                <div id="canvas-exp" style="position: absolute; top: 150px; left: 70px; right: 70px; bottom: 90px; border: 2px dashed rgba(0,0,0,0.1); border-radius: 6px; z-index: 10; cursor: crosshair;">
+                    <div class="upload-hint" id="hint-exp" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; pointer-events: auto; cursor: pointer;" onclick="document.getElementById('fi-exp').click()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width: 48px; height: 48px; margin-bottom: 10px; color: #64748b;"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        <br><span style="font-weight: 800; font-size: 16px; color:#1e293b;">1. Sube tu Render Explosivo</span><br>
+                        <span style="color:#ef4444; font-weight:700;">2. Haz DOBLE CLIC aquí adentro para agregar descripciones.</span>
+                    </div>
+                    <img id="img-exp" src="" style="width: 100%; height: 100%; object-fit: contain; display: none; pointer-events: none;">
+                </div>
+
+                <div class="doc-footer">
+                    <div contenteditable="true" spellcheck="false">DEPARTAMENTO DE DISEÑO GRÁFICO</div>
+                    <div class="dyn-prop">CORPORATIVO THG</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        function updateUI() {
+            const title = document.getElementById('g-title').value;
+            const suffix = document.getElementById('g-suffix').value;
+            
+            document.querySelectorAll('.dyn-title').forEach(el => {
+                if(el.parentElement.className === 'cover-text') {
+                    el.innerHTML = `${title} <span style="color:#38bdf8;">- ${suffix}</span>`;
+                } else if(el.innerHTML !== '_') {
+                    el.innerText = suffix ? `${title} - ${suffix}` : title;
+                }
+            });
+            const prop = document.getElementById('g-prop').value;
+            document.querySelectorAll('.dyn-prop').forEach(el => el.innerText = prop.toUpperCase());
+        }
+
+        function previewImg(event, imgId) {
+            const file = event.target.files[0];
+            if(file) {
+                const img = document.getElementById(imgId);
+                img.src = URL.createObjectURL(file);
+                img.style.display = 'block';
+                
+                if(img.parentElement.querySelector('.upload-hint')) {
+                    img.parentElement.querySelector('.upload-hint').style.display = 'none';
+                }
+                if(imgId === 'img-montaje') {
+                    document.getElementById('btn-montaje-overlay').style.display = 'none';
+                }
+                if(imgId === 'img-exp') {
+                    document.getElementById('hint-exp').style.display = 'none';
+                }
+            }
+        }
+
+        // Paneo Montaje
+        const panImg = document.getElementById('img-montaje');
+        let isPanning = false;
+        panImg.addEventListener('mousedown', () => { isPanning = true; panImg.style.cursor = 'grabbing'; });
+        window.addEventListener('mouseup', () => { isPanning = false; panImg.style.cursor = 'grab'; });
+        panImg.addEventListener('mousemove', (e) => {
+            if(!isPanning || !panImg.src) return;
+            const rect = panImg.parentElement.getBoundingClientRect();
+            let xPos = ((e.clientX - rect.left) / rect.width) * 100;
+            let yPos = ((e.clientY - rect.top) / rect.height) * 100;
+            xPos = Math.max(0, Math.min(100, xPos));
+            yPos = Math.max(0, Math.min(100, yPos));
+            panImg.style.objectPosition = `${xPos}% ${yPos}%`;
+        });
+        panImg.addEventListener('dragstart', (e) => e.preventDefault());
+
+
+        // --- DRAG PARA LA CAJA SMART (PAG 3) ---
+        const smartBox = document.getElementById('draggable-smart-box');
+        const handleBox = smartBox.querySelector('.drag-handle-box');
+        const colLeft = document.getElementById('col-desc-left');
+        
+        handleBox.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            const rect = smartBox.getBoundingClientRect();
+            
+            // Si estaba en posicion "relative" inicial, calcular su offset exacto antes de hacerlo absolute
+            if (window.getComputedStyle(smartBox).position !== 'absolute') {
+                const parentRect = colLeft.getBoundingClientRect();
+                smartBox.style.left = (rect.left - parentRect.left) + 'px';
+                smartBox.style.top = (rect.top - parentRect.top) + 'px';
+                smartBox.style.position = 'absolute';
+                smartBox.style.margin = '0';
+            }
+
+            let shiftX = e.clientX - rect.left;
+            let shiftY = e.clientY - rect.top;
+            
+            function moveAt(pageX, pageY) {
+                const parentRect = colLeft.getBoundingClientRect();
+                let newL = pageX - parentRect.left - shiftX;
+                let newT = pageY - parentRect.top - shiftY;
+                
+                smartBox.style.left = newL + 'px';
+                smartBox.style.top = newT + 'px';
+            }
+            
+            function onMouseMove(event) { moveAt(event.clientX, event.clientY); }
+            document.addEventListener('mousemove', onMouseMove);
+            document.addEventListener('mouseup', function cleanup() {
+                document.removeEventListener('mousemove', onMouseMove);
+                document.removeEventListener('mouseup', cleanup);
+            });
+        });
+
+
+        // --- LÓGICA DE CANVAS LIBRE (PAG 4) ---
+        let bulletCounter = 1;
+        const canvasExp = document.getElementById('canvas-exp');
+        
+        canvasExp.addEventListener('dblclick', function(e) {
+            if(e.target.closest('.free-text')) return;
+
+            const rect = canvasExp.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            const bullet = document.createElement('div');
+            bullet.className = 'free-text';
+            bullet.style.left = x + 'px';
+            bullet.style.top = y + 'px';
+            
+            bullet.innerHTML = `
+                <div class="drag-handle">✥</div>
+                <div class="ft-circle" contenteditable="true">${bulletCounter++}</div>
+                <div class="ft-desc" contenteditable="true" spellcheck="false" style="outline:none;">Describe esta pieza...</div>
+                <div class="ft-delete" onclick="this.parentElement.remove()">×</div>
+            `;
+            
+            canvasExp.appendChild(bullet);
+            initDragBullet(bullet);
+        });
+
+        function initDragBullet(bullet) {
+            const handle = bullet.querySelector('.drag-handle');
+            handle.addEventListener('mousedown', function(e) {
+                e.preventDefault(); 
+                let shiftX = e.clientX - bullet.getBoundingClientRect().left;
+                let shiftY = e.clientY - bullet.getBoundingClientRect().top;
+                
+                function moveAt(pageX, pageY) {
+                    const canvasRect = canvasExp.getBoundingClientRect();
+                    let newL = pageX - canvasRect.left - shiftX;
+                    let newT = pageY - canvasRect.top - shiftY;
+                    bullet.style.left = newL + 'px';
+                    bullet.style.top = newT + 'px';
+                }
+                
+                function onMouseMove(event) { moveAt(event.clientX, event.clientY); }
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', function cleanup() {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', cleanup);
+                });
+            });
+        }
+
+        updateUI();
+    </script>
+</body>
+</html>
