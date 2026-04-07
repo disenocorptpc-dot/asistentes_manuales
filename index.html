@@ -112,8 +112,8 @@
         .page-cover { background-color: var(--doc-blue); color: white; display: flex; align-items: center; justify-content: flex-start; padding-left: 70px; }
         .cover-lines { position: absolute; top: 0; left: 0; right: 0; bottom: 0; background-image: repeating-linear-gradient(30deg, transparent, transparent 10px, rgba(255,255,255,0.05) 10px, rgba(255,255,255,0.05) 11px); z-index: 0; opacity: 0.8; pointer-events:none;}
         .cover-text { position: relative; z-index: 2; width: 80%; }
-        .cover-text h1 { font-size: 40px; font-weight: 500; margin: 0; text-transform: uppercase; line-height: 1.1; letter-spacing: -0.02em; }
-        .cover-text h2 { font-size: 40px; font-weight: 500; margin: 0; text-transform: uppercase; color: #fff; line-height: 1.1; letter-spacing: -0.02em; }
+        .cover-text h1 { font-size: 22px; font-weight: 600; margin: 0 0 10px 0; text-transform: uppercase; letter-spacing: 0.1em; color: #cbd5e1; }
+        .cover-text h2 { font-size: 55px; font-weight: 800; margin: 0; text-transform: uppercase; color: #fff; line-height: 1.05; letter-spacing: -0.02em; }
         .footer-cover { border-top-color: rgba(255,255,255,0.2) !important; color: white !important; }
 
         /* Pag 2: Montaje (Full Bleed) */
@@ -708,7 +708,7 @@
                 });
             });
 
-            return { inputs, images, montageObjPos, smartBox, staticEdits, bullets, bulletCounter };
+            return { version: 2, inputs, images, montageObjPos, smartBox, staticEdits, bullets, bulletCounter };
         }
 
         function applyProjectData(data) {
@@ -770,15 +770,20 @@
                 smartPropEl.style.height = data.smartBox.propHeight || 'auto';
             }
 
-            // 5. Restaurar Textos Editables Estáticos
-            if (data.staticEdits) {
-                let i = 0;
-                document.querySelectorAll('[contenteditable="true"]').forEach(el => {
-                    if (!el.closest('.free-text') && i < data.staticEdits.length) {
-                        el.innerHTML = data.staticEdits[i];
-                        i++;
+            // 5. Restaurar Textos Editables Estáticos (Con compatibilidad de versiones)
+            if (data.staticEdits && Array.isArray(data.staticEdits)) {
+                let editables = document.querySelectorAll('[contenteditable="true"]:not(.free-text)');
+                let startIndex = (data.version && data.version >= 2) ? 0 : 1; 
+                let dataIdx = 0;
+                
+                for (let i = 0; i < editables.length; i++) {
+                    if (startIndex === 1 && i === 0) continue; // Salta el H1 agregado después para archivos viejos
+                    
+                    if (dataIdx < data.staticEdits.length) {
+                        editables[i].innerHTML = data.staticEdits[dataIdx];
+                        dataIdx++;
                     }
-                });
+                }
             }
 
             // 6. Restaurar Balas Dinámicas en Canvas Explosivo
