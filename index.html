@@ -90,8 +90,8 @@
         .doc-footer { position: absolute; bottom: 45px; left: 70px; right: 70px; display: flex; justify-content: space-between; border-top: 2px solid rgba(0,0,0,0.1); padding-top: 15px; font-size: 11px; font-weight: 800; color: #475569; z-index: 10; }
 
         /* --- SLIDE CONTROLS --- */
-        .page-wrapper { position: relative; margin: 0 auto; display: flex; justify-content: center; width: max-content;}
-        .page-controls { position: absolute; bottom: -45px; display: flex; gap: 10px; opacity: 0.2; transition: opacity 0.2s; z-index: 100;}
+        .page-wrapper { position: relative; display: inline-block; }
+        .page-controls { position: absolute; bottom: -45px; display: flex; gap: 10px; opacity: 0.2; transition: opacity 0.2s; z-index: 100; left: 50%; transform: translateX(-50%);}
         .page-wrapper:hover .page-controls { opacity: 1; }
         .page-controls button { background: #1e293b; color: white; border: 1px solid var(--primary); border-radius: 4px; padding: 5px 15px; cursor: pointer; font-weight: bold; }
         .page-controls button:hover { background: var(--primary); color: #0f172a; }
@@ -256,7 +256,7 @@
                 
                 <div class="layout-desc">
                     <div class="desc-left" id="col-desc-left">
-                        <div style="font-size: 22px; font-weight: 800; color: #222;" contenteditable="true">Descriptivo</div>
+                        <div style="font-size: 22px; font-weight: 400; color: #222;" contenteditable="true">Descriptivo</div>
                         <div contenteditable="true" class="formato-texto" spellcheck="false">
                             Madera sólida color avellana clara de 12 mm de espesor. El frente presenta un desbaste de 3 mm para la incrustación de íconos en acrílico de 12 mm...
                         </div>
@@ -321,34 +321,56 @@
                 e.preventDefault();
                 const img = e.target;
                 let currentScale = parseFloat(img.dataset.scale || 1);
-                let currentTx = parseFloat(img.dataset.tx || 0);
-                let currentTy = parseFloat(img.dataset.ty || 0);
 
                 let dir = e.deltaY > 0 ? -0.1 : 0.1;
                 currentScale += dir;
                 currentScale = Math.max(0.1, Math.min(10, currentScale)); 
                 
                 img.dataset.scale = currentScale;
-                img.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentScale})`;
+                img.style.transform = `scale(${currentScale})`;
             }
         }, {passive: false});
 
         let isDraggingImg = false, dragTargetImg = null, startX, startY;
+        let startObjX = 50, startObjY = 50;
+        
         document.addEventListener('mousedown', (e) => {
-            if (e.target.tagName === 'IMG' && e.target.closest('.upload-zone') && e.target.id !== 'img-montaje') {
-                isDraggingImg = true; dragTargetImg = e.target; startX = e.clientX; startY = e.clientY;
+            if (e.target.tagName === 'IMG' && e.target.closest('.upload-zone')) {
+                isDraggingImg = true; 
+                dragTargetImg = e.target; 
+                startX = e.clientX; 
+                startY = e.clientY;
                 dragTargetImg.style.cursor = 'grabbing';
+                
+                let objPos = dragTargetImg.style.objectPosition || "50% 50%";
+                let parts = objPos.split('%');
+                if(parts.length >= 2) {
+                    startObjX = parseFloat(parts[0]);
+                    startObjY = parseFloat(parts[1]);
+                }
             }
         });
-        document.addEventListener('mouseup', () => { if(isDraggingImg && dragTargetImg) { isDraggingImg = false; dragTargetImg.style.cursor = ''; dragTargetImg = null; } });
+        
+        document.addEventListener('mouseup', () => { 
+            if(isDraggingImg && dragTargetImg) { 
+                isDraggingImg = false; 
+                dragTargetImg.style.cursor = ''; 
+                dragTargetImg = null; 
+            } 
+        });
+        
         document.addEventListener('mousemove', (e) => {
             if(isDraggingImg && dragTargetImg) {
                 e.preventDefault();
-                let currentTx = parseFloat(dragTargetImg.dataset.tx || 0), currentTy = parseFloat(dragTargetImg.dataset.ty || 0), currentScale = parseFloat(dragTargetImg.dataset.scale || 1);
-                let dx = e.clientX - startX, dy = e.clientY - startY;
-                dragTargetImg.dataset.tx = currentTx + dx; dragTargetImg.dataset.ty = currentTy + dy;
-                dragTargetImg.style.transform = `translate(${currentTx + dx}px, ${currentTy + dy}px) scale(${currentScale})`;
-                startX = e.clientX; startY = e.clientY;
+                let dx = e.clientX - startX;
+                let dy = e.clientY - startY;
+                
+                const rect = dragTargetImg.parentElement.getBoundingClientRect();
+                
+                let newX = startObjX - (dx / rect.width) * 100;
+                let newY = startObjY - (dy / rect.height) * 100;
+                
+                dragTargetImg.style.objectPosition = `${newX}% ${newY}%`;
             }
         });
 
@@ -533,21 +555,7 @@
             }
         }
 
-        // Paneo Montaje
-        const panImg = document.getElementById('img-montaje');
-        let isPanning = false;
-        panImg.addEventListener('mousedown', () => { isPanning = true; panImg.style.cursor = 'grabbing'; });
-        window.addEventListener('mouseup', () => { isPanning = false; panImg.style.cursor = 'grab'; });
-        panImg.addEventListener('mousemove', (e) => {
-            if(!isPanning || !panImg.src) return;
-            const rect = panImg.parentElement.getBoundingClientRect();
-            let xPos = ((e.clientX - rect.left) / rect.width) * 100;
-            let yPos = ((e.clientY - rect.top) / rect.height) * 100;
-            xPos = Math.max(0, Math.min(100, xPos));
-            yPos = Math.max(0, Math.min(100, yPos));
-            panImg.style.objectPosition = `${xPos}% ${yPos}%`;
-        });
-        panImg.addEventListener('dragstart', (e) => e.preventDefault());
+        // (Anterior Paneo de Montaje removido ya que el nuevo sistema lo engloba todo con object-position)
 
 
         // --- DRAG PARA LA CAJA SMART (PAG 3) ---
