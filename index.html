@@ -41,7 +41,7 @@
         /* --- INTERACCIÓN CANVA --- */
         [contenteditable="true"] { outline: none; transition: all 0.2s; border-radius: 4px; padding: 2px 4px; margin: -2px -4px; }
         [contenteditable="true"]:hover { background: rgba(56, 189, 248, 0.15); box-shadow: 0 0 0 1px #38bdf8 dashed; cursor: text; }
-        [contenteditable="true"]:focus { background: white; color: black !important; box-shadow: 0 0 0 2px #38bdf8; z-index: 50; position:relative;}
+        [contenteditable="true"]:focus { background: white; color: black !important; box-shadow: 0 0 0 2px #38bdf8; z-index: 50;}
 
         .upload-zone { border: 2px dashed rgba(0,0,0,0.2); background: rgba(255,255,255,0.4); display: flex; align-items: center; justify-content: center; flex-direction: column; color: #64748b; font-weight: 600; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.2s; box-sizing: border-box;}
         .upload-zone:hover { border-color: var(--primary); }
@@ -321,32 +321,36 @@
                 e.preventDefault();
                 const img = e.target;
                 let currentScale = parseFloat(img.dataset.scale || 1);
+                let currentTx = parseFloat(img.dataset.tx || 0);
+                let currentTy = parseFloat(img.dataset.ty || 0);
 
                 let dir = e.deltaY > 0 ? -0.1 : 0.1;
                 currentScale += dir;
                 currentScale = Math.max(0.1, Math.min(10, currentScale)); 
                 
                 img.dataset.scale = currentScale;
-                img.style.transform = `scale(${currentScale})`;
+                img.style.transform = `translate(${currentTx}px, ${currentTy}px) scale(${currentScale})`;
             }
         }, {passive: false});
 
         let isDraggingImg = false, dragTargetImg = null, startX, startY;
-        let startObjX = 50, startObjY = 50;
+        let startTx = 0, startTy = 0;
         
         document.addEventListener('mousedown', (e) => {
             if (e.target.tagName === 'IMG' && e.target.closest('.upload-zone')) {
+                // Prevenir interferencia con otras acciones
+                e.preventDefault(); 
                 isDraggingImg = true; 
                 dragTargetImg = e.target; 
                 startX = e.clientX; 
                 startY = e.clientY;
                 dragTargetImg.style.cursor = 'grabbing';
                 
-                let objPos = dragTargetImg.style.objectPosition || "50% 50%";
-                let parts = objPos.split('%');
-                if(parts.length >= 2) {
-                    startObjX = parseFloat(parts[0]);
-                    startObjY = parseFloat(parts[1]);
+                startTx = parseFloat(dragTargetImg.dataset.tx || 0);
+                startTy = parseFloat(dragTargetImg.dataset.ty || 0);
+                // Si la imagen trae objectPosition viejo, lo limpiamos para evitar conflictos
+                if (dragTargetImg.style.objectPosition) {
+                    dragTargetImg.style.objectPosition = '';
                 }
             }
         });
@@ -365,12 +369,14 @@
                 let dx = e.clientX - startX;
                 let dy = e.clientY - startY;
                 
-                const rect = dragTargetImg.parentElement.getBoundingClientRect();
+                let newTx = startTx + dx;
+                let newTy = startTy + dy;
                 
-                let newX = startObjX - (dx / rect.width) * 100;
-                let newY = startObjY - (dy / rect.height) * 100;
+                let currentScale = parseFloat(dragTargetImg.dataset.scale || 1);
                 
-                dragTargetImg.style.objectPosition = `${newX}% ${newY}%`;
+                dragTargetImg.dataset.tx = newTx;
+                dragTargetImg.dataset.ty = newTy;
+                dragTargetImg.style.transform = `translate(${newTx}px, ${newTy}px) scale(${currentScale})`;
             }
         });
 
