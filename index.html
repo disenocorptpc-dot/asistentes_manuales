@@ -437,26 +437,43 @@
             const clonePage = cloneWrapper.querySelector('.page');
             clonePage.id = 'page-' + Math.random().toString(36).substr(2, 9);
             
+            const idMap = {};
             Array.from(clonePage.querySelectorAll('[id]')).forEach(el => {
-                const oldId = el.id;
-                el.id = oldId + '-' + Math.random().toString(36).substr(2, 5);
-                if (el.classList.contains('upload-zone') || el.classList.contains('btn-cargar-montaje') || el.classList.contains('upload-hint')) {
-                   const oldClick = el.getAttribute('onclick');
-                   if (oldClick && oldClick.includes("getElementById('fi-")) {
-                       const originalInputId = oldClick.match(/'(fi-[^']+)'/)[1];
-                       const originalInput = document.getElementById(originalInputId);
-                       if (originalInput) {
-                           const newInput = originalInput.cloneNode(true);
-                           newInput.id = originalInputId + '-' + Math.random().toString(36).substr(2, 5);
-                           document.body.appendChild(newInput);
-                           let imgIdToFind = originalInputId.replace('fi-', 'img-');
-                           const clonedImg = clonePage.querySelector(`[id^="${imgIdToFind}"]`);
-                           if(clonedImg) {
-                               newInput.setAttribute('onchange', `previewImg(event, '${clonedImg.id}')`);
-                               el.setAttribute('onclick', `document.getElementById('${newInput.id}').click()`);
-                           }
-                       }
-                   }
+                // Keep base type clean (e.g. img-desc)
+                const baseId = el.id.split('-').slice(0, 2).join('-');
+                const newId = baseId + '-' + Math.random().toString(36).substr(2, 5);
+                idMap[el.id] = newId;
+                el.id = newId;
+            });
+
+            Array.from(clonePage.querySelectorAll('[onclick]')).forEach(el => {
+                const oldClick = el.getAttribute('onclick');
+                if (oldClick && oldClick.includes("getElementById('fi-")) {
+                    const match = oldClick.match(/'(fi-[^']+)'/);
+                    if (match) {
+                        const originalInputId = match[1];
+                        const originalInput = document.getElementById(originalInputId);
+                        if (originalInput) {
+                            const newInput = originalInput.cloneNode(true);
+                            const newInputId = originalInputId.split('-').slice(0, 2).join('-') + '-' + Math.random().toString(36).substr(2, 5);
+                            newInput.id = newInputId;
+                            document.body.appendChild(newInput);
+                            
+                            el.setAttribute('onclick', oldClick.replace(originalInputId, newInputId));
+                            
+                            const oldOnChange = originalInput.getAttribute('onchange');
+                            if (oldOnChange) {
+                                const imgMatch = oldOnChange.match(/'([^']+)'/);
+                                if (imgMatch) {
+                                    const oldImgId = imgMatch[1];
+                                    const newImgId = idMap[oldImgId]; 
+                                    if (newImgId) {
+                                        newInput.setAttribute('onchange', oldOnChange.replace(oldImgId, newImgId));
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             });
 
@@ -742,12 +759,11 @@
             };
 
             // 2. Imágenes (Guardadas en Base64 desde el atributo src)
-            const images = {
-                montaje: document.getElementById('img-montaje').src, 
-                flat: document.getElementById('img-flat').src,
-                desc: document.getElementById('img-desc').src,
-                exp: document.getElementById('img-exp').src
-            };
+            const images = {};
+            ['img-montaje', 'img-flat', 'img-desc', 'img-exp'].forEach(k => {
+                const el = document.getElementById(k);
+                images[k.replace('img-', '')] = el ? el.src : '';
+            });
             Object.keys(images).forEach(k => {
                 if (!images[k] || !images[k].startsWith('data:')) {
                     images[k] = '';
