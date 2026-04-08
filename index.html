@@ -588,34 +588,64 @@
             if(file) {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    const img = document.getElementById(imgId);
-                    img.src = e.target.result;
-                    img.style.display = 'block';
-                    img.style.pointerEvents = 'auto'; // allow dragging and clicking
-                    
-                    if(img.parentElement.querySelector('.upload-hint')) {
-                        img.parentElement.querySelector('.upload-hint').style.display = 'none';
-                    }
-                    if(imgId === 'img-montaje') {
-                        document.getElementById('btn-montaje-overlay').style.display = 'none';
-                    }
-                    if(imgId === 'img-exp') {
-                        document.getElementById('hint-exp').style.display = 'none';
-                    }
-                    
-                    // Create floating controls for image replacement and deletion
-                    let controls = img.parentElement.querySelector('.img-controls-overlay');
-                    if (!controls) {
-                        controls = document.createElement('div');
-                        controls.className = 'img-controls-overlay active';
-                        controls.innerHTML = `
-                            <button onclick="event.stopPropagation(); triggerImgUpload(this)" class="img-btn">🔄 Reemplazar</button>
-                            <button onclick="event.stopPropagation(); clearImg(this)" class="img-btn bg-red">🗑️ Eliminar</button>
-                        `;
-                        img.parentElement.appendChild(controls);
-                    } else {
-                        controls.classList.add('active');
-                    }
+                    const tempImg = new Image();
+                    tempImg.onload = function() {
+                        const MAX_SIZE = 2400; // Limit rendering max width/height to 2400px (Plenty for 300dpi letter)
+                        let width = tempImg.width;
+                        let height = tempImg.height;
+
+                        if (width > MAX_SIZE || height > MAX_SIZE) {
+                            if (width > height) {
+                                height = Math.round(height * (MAX_SIZE / width));
+                                width = MAX_SIZE;
+                            } else {
+                                width = Math.round(width * (MAX_SIZE / height));
+                                height = MAX_SIZE;
+                            }
+                        }
+
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(tempImg, 0, 0, width, height);
+
+                        // Convertir a WebP para soporte en transparencia con compresión extrema (reduce 90% peso PDF/ASM)
+                        const compressedDataUrl = canvas.toDataURL('image/webp', 0.90);
+
+                        const img = document.getElementById(imgId);
+                        img.src = compressedDataUrl;
+                        img.style.display = 'block';
+                        img.style.pointerEvents = 'auto'; // allow dragging and clicking
+                        
+                        if(img.parentElement.querySelector('.upload-hint')) {
+                            img.parentElement.querySelector('.upload-hint').style.display = 'none';
+                        }
+                        if(imgId.startsWith('img-montaje')) {
+                            const btnOverlay = img.parentElement.parentElement.querySelector('.btn-cargar-montaje');
+                            if(btnOverlay) btnOverlay.style.display = 'none';
+                        }
+                        if(imgId.startsWith('img-exp')) {
+                            const hintExp = img.parentElement.querySelector('#hint-exp');
+                            if (hintExp) hintExp.style.display = 'none';
+                        }
+                        
+                        // Create floating controls for image replacement and deletion
+                        let controls = img.parentElement.querySelector('.img-controls-overlay');
+                        if (!controls) {
+                            controls = document.createElement('div');
+                            controls.className = 'img-controls-overlay active';
+                            controls.innerHTML = `
+                                <button onclick="event.stopPropagation(); triggerImgUpload(this)" class="img-btn">🔄 Reemplazar</button>
+                                <button onclick="event.stopPropagation(); clearImg(this)" class="img-btn bg-red">🗑️ Eliminar</button>
+                            `;
+                            img.parentElement.appendChild(controls);
+                        } else {
+                            controls.classList.add('active');
+                        }
+                        triggerAutoSave();
+                    };
+                    tempImg.src = e.target.result;
                 };
                 reader.readAsDataURL(file);
             }
