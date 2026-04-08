@@ -771,19 +771,20 @@
             });
 
             // 3. Posición de Paneo
-            const montageObjPos = document.getElementById('img-montaje').style.objectPosition || '';
+            const montageEl = document.getElementById('img-montaje');
+            const montageObjPos = montageEl ? (montageEl.style.objectPosition || '') : '';
 
             // 4. Estado de la "Caja Inteligente"
             const smartBoxEl = document.getElementById('draggable-smart-box');
             const smartPropEl = document.querySelector('.smart-content-prop');
-            const smartBox = {
+            const smartBox = smartBoxEl && smartPropEl ? {
                 position: smartBoxEl.style.position || '',
                 left: smartBoxEl.style.left || '',
                 top: smartBoxEl.style.top || '',
                 margin: smartBoxEl.style.margin || '',
                 propWidth: smartPropEl.style.width || '',
                 propHeight: smartPropEl.style.height || ''
-            };
+            } : {};
 
             // 5. Textos Editables Estáticos
             const staticEdits = [];
