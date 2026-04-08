@@ -457,7 +457,9 @@
                             const newInput = originalInput.cloneNode(true);
                             const newInputId = originalInputId.split('-').slice(0, 2).join('-') + '-' + Math.random().toString(36).substr(2, 5);
                             newInput.id = newInputId;
-                            document.body.appendChild(newInput);
+                            
+                            // Insert newInput directly inside the cloned page-wrapper so it serializes natively inside getProjectData
+                            wrapper.appendChild(newInput);
                             
                             el.setAttribute('onclick', oldClick.replace(originalInputId, newInputId));
                             
@@ -697,70 +699,80 @@
 
 
         // --- DRAG PARA LA CAJA SMART (PAG 3) ---
-        const smartBox = document.getElementById('draggable-smart-box');
-        const handleBox = smartBox.querySelector('.drag-handle-box');
-        const colLeft = document.getElementById('col-desc-left');
-        
-        handleBox.addEventListener('mousedown', function(e) {
-            e.preventDefault();
-            const rect = smartBox.getBoundingClientRect();
+        function initSmartBoxDrag(handleBox) {
+            const smartBox = handleBox.closest('#draggable-smart-box');
+            if(!smartBox) return;
+            const colLeft = document.getElementById('col-desc-left');
             
-            // Si estaba en posicion "relative" inicial, calcular su offset exacto antes de hacerlo absolute
-            if (window.getComputedStyle(smartBox).position !== 'absolute') {
-                const parentRect = colLeft.getBoundingClientRect();
-                smartBox.style.left = (rect.left - parentRect.left) + 'px';
-                smartBox.style.top = (rect.top - parentRect.top) + 'px';
-                smartBox.style.position = 'absolute';
-                smartBox.style.margin = '0';
-            }
+            // Eliminar listener previo si existiera (limpiar clonados)
+            const newHandle = handleBox.cloneNode(true);
+            handleBox.parentNode.replaceChild(newHandle, handleBox);
 
-            let shiftX = e.clientX - rect.left;
-            let shiftY = e.clientY - rect.top;
-            
-            function moveAt(pageX, pageY) {
-                const parentRect = colLeft.getBoundingClientRect();
-                let newL = pageX - parentRect.left - shiftX;
-                let newT = pageY - parentRect.top - shiftY;
+            newHandle.addEventListener('mousedown', function(e) {
+                e.preventDefault();
+                const rect = smartBox.getBoundingClientRect();
                 
-                smartBox.style.left = newL + 'px';
-                smartBox.style.top = newT + 'px';
-            }
-            
-            function onMouseMove(event) { moveAt(event.clientX, event.clientY); }
-            document.addEventListener('mousemove', onMouseMove);
-            document.addEventListener('mouseup', function cleanup() {
-                document.removeEventListener('mousemove', onMouseMove);
-                document.removeEventListener('mouseup', cleanup);
+                if (window.getComputedStyle(smartBox).position !== 'absolute') {
+                    const parentRect = colLeft.getBoundingClientRect();
+                    smartBox.style.left = (rect.left - parentRect.left) + 'px';
+                    smartBox.style.top = (rect.top - parentRect.top) + 'px';
+                    smartBox.style.position = 'absolute';
+                    smartBox.style.margin = '0';
+                }
+
+                let shiftX = e.clientX - rect.left;
+                let shiftY = e.clientY - rect.top;
+                
+                function moveAt(pageX, pageY) {
+                    const parentRect = colLeft.getBoundingClientRect();
+                    let newL = pageX - parentRect.left - shiftX;
+                    let newT = pageY - parentRect.top - shiftY;
+                    
+                    smartBox.style.left = newL + 'px';
+                    smartBox.style.top = newT + 'px';
+                }
+                
+                function onMouseMove(event) { moveAt(event.clientX, event.clientY); }
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('mouseup', function cleanup() {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    document.removeEventListener('mouseup', cleanup);
+                });
             });
-        });
+        }
+        const initialHandleBox = document.querySelector('.drag-handle-box');
+        if(initialHandleBox) initSmartBoxDrag(initialHandleBox);
 
 
         // --- LÓGICA DE CANVAS LIBRE (PAG 4) ---
         let bulletCounter = 1;
-        const canvasExp = document.getElementById('canvas-exp');
         
-        canvasExp.addEventListener('dblclick', function(e) {
-            if(e.target.closest('.free-text')) return;
+        function initCanvasExpDoubleclick(canvasExp) {
+            canvasExp.addEventListener('dblclick', function(e) {
+                if(e.target.closest('.free-text')) return;
 
-            const rect = canvasExp.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
+                const rect = canvasExp.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
 
-            const bullet = document.createElement('div');
-            bullet.className = 'free-text';
-            bullet.style.left = x + 'px';
-            bullet.style.top = y + 'px';
-            
-            bullet.innerHTML = `
-                <div class="drag-handle">✥</div>
-                <div class="ft-circle" contenteditable="true">${bulletCounter++}</div>
-                <div class="ft-desc" contenteditable="true" spellcheck="false" style="outline:none;">Describe esta pieza...</div>
-                <div class="ft-delete" onclick="this.parentElement.remove()">×</div>
-            `;
-            
-            canvasExp.appendChild(bullet);
-            initDragBullet(bullet);
-        });
+                const bullet = document.createElement('div');
+                bullet.className = 'free-text';
+                bullet.style.left = x + 'px';
+                bullet.style.top = y + 'px';
+                
+                bullet.innerHTML = `
+                    <div class="drag-handle">✥</div>
+                    <div class="ft-circle" contenteditable="true">${bulletCounter++}</div>
+                    <div class="ft-desc" contenteditable="true" spellcheck="false" style="outline:none;">Describe esta pieza...</div>
+                    <div class="ft-delete" onclick="this.parentElement.remove()">×</div>
+                `;
+                
+                canvasExp.appendChild(bullet);
+                initDragBullet(bullet);
+            });
+        }
+        
+        document.querySelectorAll('#canvas-exp').forEach(cv => initCanvasExpDoubleclick(cv));
 
         function initDragBullet(bullet) {
             const handle = bullet.querySelector('.drag-handle');
@@ -787,77 +799,109 @@
         }
 
         function getProjectData() {
-            // 1. Inputs de Texto
+            // 1. Inputs Globales
             const inputs = {
-                title: document.getElementById('g-title').value,
-                suffix: document.getElementById('g-suffix').value,
-                prop: document.getElementById('g-prop').value
+                title: document.getElementById('g-title') ? document.getElementById('g-title').value : '',
+                suffix: document.getElementById('g-suffix') ? document.getElementById('g-suffix').value : '',
+                prop: document.getElementById('g-prop') ? document.getElementById('g-prop').value : ''
             };
 
-            // 2. Imágenes (Guardadas en Base64 desde el atributo src)
-            const images = {};
-            ['img-montaje', 'img-flat', 'img-desc', 'img-exp'].forEach(k => {
-                const el = document.getElementById(k);
-                images[k.replace('img-', '')] = el ? el.src : '';
-            });
-            Object.keys(images).forEach(k => {
-                if (!images[k] || !images[k].startsWith('data:')) {
-                    images[k] = '';
+            // Para v3: hacemos una copia profunda del DOM contenedor de Slides entero
+            const containerHtmlEl = document.getElementById('pages-container').cloneNode(true);
+            
+            // Consolidar todos los "contenteditable" current values (el DOM innerHTML a veces no está sync con el estado visual si usan textContent, 
+            // pero elements con contenteditable SÍ reflejan innerHTML. Aún asi forzamos actualización por si acaso)
+            const reals = document.getElementById('pages-container').querySelectorAll('[contenteditable="true"]');
+            const clones = containerHtmlEl.querySelectorAll('[contenteditable="true"]');
+            reals.forEach((r, i) => { if(clones[i]) clones[i].innerHTML = r.innerHTML; });
+
+            // Capturar transformaciones visuales dinámicas de object-position y scale
+            const realImgs = document.getElementById('pages-container').querySelectorAll('img');
+            const cloneImgs = containerHtmlEl.querySelectorAll('img');
+            realImgs.forEach((r, i) => {
+                if(cloneImgs[i]) {
+                    cloneImgs[i].style.objectPosition = r.style.objectPosition;
+                    cloneImgs[i].style.transform = r.style.transform;
+                    cloneImgs[i].dataset.tx = r.dataset.tx;
+                    cloneImgs[i].dataset.ty = r.dataset.ty;
+                    cloneImgs[i].dataset.scale = r.dataset.scale;
                 }
             });
 
-            // 3. Posición de Paneo
-            const montageEl = document.getElementById('img-montaje');
-            const montageObjPos = montageEl ? (montageEl.style.objectPosition || '') : '';
-
-            // 4. Estado de la "Caja Inteligente"
-            const smartBoxEl = document.getElementById('draggable-smart-box');
-            const smartPropEl = document.querySelector('.smart-content-prop');
-            const smartBox = smartBoxEl && smartPropEl ? {
-                position: smartBoxEl.style.position || '',
-                left: smartBoxEl.style.left || '',
-                top: smartBoxEl.style.top || '',
-                margin: smartBoxEl.style.margin || '',
-                propWidth: smartPropEl.style.width || '',
-                propHeight: smartPropEl.style.height || ''
-            } : {};
-
-            // 5. Textos Editables Estáticos
-            const staticEdits = [];
-            document.querySelectorAll('[contenteditable="true"]').forEach(el => {
-                if (!el.closest('.free-text')) {
-                    staticEdits.push(el.innerHTML);
+            // Capturar la caja dragable
+            const realSmartbox = document.getElementById('draggable-smart-box');
+            if (realSmartbox) {
+                const cSmart = containerHtmlEl.querySelector('#draggable-smart-box');
+                if (cSmart) {
+                    cSmart.style.position = realSmartbox.style.position;
+                    cSmart.style.left = realSmartbox.style.left;
+                    cSmart.style.top = realSmartbox.style.top;
+                    cSmart.style.margin = realSmartbox.style.margin;
+                }
+            }
+            
+            // Extraer las imágenes base64 fuera del HTML para administrar cuotas de Storage fácilmente
+            const imagesV3 = {};
+            cloneImgs.forEach((img, idx) => {
+                if (img.src && img.src.startsWith('data:')) {
+                    const key = 'imgV3_' + idx;
+                    imagesV3[key] = img.src;
+                    img.setAttribute('data-img-key', key);
+                    img.src = ''; // Vaciar la cadena gigante del HTML para evitar atascar el LocalStorage
                 }
             });
 
-            // 6. Balas Dinámicas en Canvas
-            const bullets = [];
-            document.querySelectorAll('.free-text').forEach(bullet => {
-                bullets.push({
-                    left: bullet.style.left,
-                    top: bullet.style.top,
-                    html: bullet.innerHTML 
-                });
-            });
+            const containerHTML = containerHtmlEl.innerHTML;
 
-            return { version: 2, inputs, images, montageObjPos, smartBox, staticEdits, bullets, bulletCounter };
+            return { version: 3, inputs, containerHTML, imagesV3, bulletCounter };
         }
 
         function applyProjectData(data) {
             // 1. Restaurar Inputs Globales
             if (data.inputs) {
-                document.getElementById('g-title').value = data.inputs.title || '';
-                document.getElementById('g-suffix').value = data.inputs.suffix || '';
-                document.getElementById('g-prop').value = data.inputs.prop || '';
+                if(document.getElementById('g-title')) document.getElementById('g-title').value = data.inputs.title || '';
+                if(document.getElementById('g-suffix')) document.getElementById('g-suffix').value = data.inputs.suffix || '';
+                if(document.getElementById('g-prop')) document.getElementById('g-prop').value = data.inputs.prop || '';
                 
                 ['g-title', 'g-suffix', 'g-prop'].forEach(id => {
                     let el = document.getElementById(id);
-                    el.dispatchEvent(new Event('input'));
-                    el.dispatchEvent(new Event('keyup'));
+                    if(el) {
+                        el.dispatchEvent(new Event('input'));
+                        el.dispatchEvent(new Event('keyup'));
+                    }
                 });
             }
 
-            // 2. Restaurar Imágenes
+            // MODO V3: Restauración Completamente Dinámica
+            if (data.version && data.version >= 3 && data.containerHTML) {
+                const container = document.getElementById('pages-container');
+                container.innerHTML = data.containerHTML;
+
+                // inyectar imagenes devuelta
+                if (data.imagesV3) {
+                    container.querySelectorAll('img[data-img-key]').forEach(img => {
+                        const key = img.getAttribute('data-img-key');
+                        if (data.imagesV3[key]) {
+                            img.src = data.imagesV3[key];
+                        }
+                    });
+                }
+
+                // Rehabilitar Drag Events en SmartBox
+                const handleBox = document.querySelector('.drag-handle-box');
+                if (handleBox) initSmartBoxDrag(handleBox);
+
+                // Rehabilitar balitas y doble clic en los canvas
+                container.querySelectorAll('.free-text').forEach(bullet => { initDragBullet(bullet); });
+                container.querySelectorAll('[id^="canvas-exp"]').forEach(cv => { initCanvasExpDoubleclick(cv); });
+
+                if (data.bulletCounter !== undefined) bulletCounter = data.bulletCounter;
+                updateSlideManager();
+                updateUI();
+                return;
+            }
+
+            // MODO V2 y V1 Legacy: Para archivos más antiguos 
             if (data.images) {
                 const imgMap = {
                     montaje: 'img-montaje',
@@ -888,13 +932,11 @@
                 }
             }
 
-            // 3. Restaurar Paneo
             if (data.montageObjPos) {
                 const montageEl = document.getElementById('img-montaje');
                 if (montageEl) montageEl.style.objectPosition = data.montageObjPos;
             }
 
-            // 4. Restaurar Caja Inteligente
             if (data.smartBox) {
                 const smartBoxEl = document.getElementById('draggable-smart-box');
                 const smartPropEl = document.querySelector('.smart-content-prop');
@@ -909,15 +951,13 @@
                 }
             }
 
-            // 5. Restaurar Textos Editables Estáticos (Con compatibilidad de versiones)
             if (data.staticEdits && Array.isArray(data.staticEdits)) {
                 let editables = document.querySelectorAll('[contenteditable="true"]:not(.free-text)');
                 let startIndex = (data.version && data.version >= 2) ? 0 : 1; 
                 let dataIdx = 0;
                 
                 for (let i = 0; i < editables.length; i++) {
-                    if (startIndex === 1 && i === 0) continue; // Salta el H1 agregado después para archivos viejos
-                    
+                    if (startIndex === 1 && i === 0) continue;
                     if (dataIdx < data.staticEdits.length) {
                         editables[i].innerHTML = data.staticEdits[dataIdx];
                         dataIdx++;
@@ -925,7 +965,6 @@
                 }
             }
 
-            // 6. Restaurar Balas Dinámicas en Canvas Explosivo
             if (data.bullets) {
                 const canvasExp = document.getElementById('canvas-exp');
                 if (canvasExp) {
@@ -993,7 +1032,7 @@
                         console.log("Autoguardado exitoso.");
                     } catch (e) {
                         console.warn("Cuota de LocalStorage excedida. Guardando progreso de texto pero omitiendo imágenes.");
-                        projectData.images = { montaje: '', flat: '', desc: '', exp: '' };
+                        projectData.imagesV3 = {};
                         localStorage.setItem('asm_autosave', JSON.stringify(projectData));
                     }
                 } catch (err) {
