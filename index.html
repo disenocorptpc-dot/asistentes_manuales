@@ -868,17 +868,21 @@
                 for (const key in imgMap) {
                     if (data.images[key] && data.images[key].startsWith('data:')) {
                         const img = document.getElementById(imgMap[key]);
-                        img.src = data.images[key];
-                        img.style.display = 'block';
-                        
-                        if(img.parentElement.querySelector('.upload-hint')) {
-                            img.parentElement.querySelector('.upload-hint').style.display = 'none';
-                        }
-                        if(imgMap[key] === 'img-montaje') {
-                            document.getElementById('btn-montaje-overlay').style.display = 'none';
-                        }
-                        if(imgMap[key] === 'img-exp') {
-                            document.getElementById('hint-exp').style.display = 'none';
+                        if (img) {
+                            img.src = data.images[key];
+                            img.style.display = 'block';
+                            
+                            const hint = img.parentElement.querySelector('.upload-hint');
+                            if(hint) hint.style.display = 'none';
+
+                            if(imgMap[key].startsWith('img-montaje')) {
+                                const btnOverlay = img.parentElement.parentElement.querySelector('.btn-cargar-montaje');
+                                if(btnOverlay) btnOverlay.style.display = 'none';
+                            }
+                            if(imgMap[key].startsWith('img-exp')) {
+                                const hintExp = img.parentElement.querySelector('#hint-exp');
+                                if (hintExp) hintExp.style.display = 'none';
+                            }
                         }
                     }
                 }
@@ -886,7 +890,8 @@
 
             // 3. Restaurar Paneo
             if (data.montageObjPos) {
-                document.getElementById('img-montaje').style.objectPosition = data.montageObjPos;
+                const montageEl = document.getElementById('img-montaje');
+                if (montageEl) montageEl.style.objectPosition = data.montageObjPos;
             }
 
             // 4. Restaurar Caja Inteligente
@@ -894,12 +899,14 @@
                 const smartBoxEl = document.getElementById('draggable-smart-box');
                 const smartPropEl = document.querySelector('.smart-content-prop');
                 
-                smartBoxEl.style.position = data.smartBox.position || '';
-                smartBoxEl.style.left = data.smartBox.left || '';
-                smartBoxEl.style.top = data.smartBox.top || '';
-                smartBoxEl.style.margin = data.smartBox.margin || '';
-                smartPropEl.style.width = data.smartBox.propWidth || '100%';
-                smartPropEl.style.height = data.smartBox.propHeight || 'auto';
+                if (smartBoxEl && smartPropEl) {
+                    smartBoxEl.style.position = data.smartBox.position || '';
+                    smartBoxEl.style.left = data.smartBox.left || '';
+                    smartBoxEl.style.top = data.smartBox.top || '';
+                    smartBoxEl.style.margin = data.smartBox.margin || '';
+                    smartPropEl.style.width = data.smartBox.propWidth || '100%';
+                    smartPropEl.style.height = data.smartBox.propHeight || 'auto';
+                }
             }
 
             // 5. Restaurar Textos Editables Estáticos (Con compatibilidad de versiones)
@@ -921,18 +928,19 @@
             // 6. Restaurar Balas Dinámicas en Canvas Explosivo
             if (data.bullets) {
                 const canvasExp = document.getElementById('canvas-exp');
-                canvasExp.querySelectorAll('.free-text').forEach(b => b.remove());
-                
-                data.bullets.forEach(bData => {
-                    const bullet = document.createElement('div');
-                    bullet.className = 'free-text';
-                    bullet.style.left = bData.left;
-                    bullet.style.top = bData.top;
-                    bullet.innerHTML = bData.html;
-                    canvasExp.appendChild(bullet);
-                    // Re-conectar handlers
-                    initDragBullet(bullet);
-                });
+                if (canvasExp) {
+                    canvasExp.querySelectorAll('.free-text').forEach(b => b.remove());
+                    
+                    data.bullets.forEach(bData => {
+                        const bullet = document.createElement('div');
+                        bullet.className = 'free-text';
+                        bullet.style.left = bData.left;
+                        bullet.style.top = bData.top;
+                        bullet.innerHTML = bData.html;
+                        canvasExp.appendChild(bullet);
+                        initDragBullet(bullet);
+                    });
+                }
             }
 
             if (data.bulletCounter !== undefined) {
