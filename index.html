@@ -608,10 +608,16 @@
                         canvas.width = width;
                         canvas.height = height;
                         const ctx = canvas.getContext('2d');
+                        
+                        // Rellenar fondo con el color de la página para que la transparencia no se vuelva negra
+                        ctx.fillStyle = '#ececec';
+                        ctx.fillRect(0, 0, width, height);
                         ctx.drawImage(tempImg, 0, 0, width, height);
 
-                        // Convertir a WebP para soporte en transparencia con compresión extrema (reduce 90% peso PDF/ASM)
-                        const compressedDataUrl = canvas.toDataURL('image/webp', 0.90);
+                        // Exportar a JPEG: El motor PDF de Chrome no re-comprime JPEG (lo incrusta nativo). 
+                        // Anteriormente, WebP obligaba a Chrome a descomprimir la imagen a mapa de bits crudos, 
+                        // inflando el PDF masivamente.
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
 
                         const img = document.getElementById(imgId);
                         img.src = compressedDataUrl;
