@@ -162,6 +162,21 @@
             }
         }
         @page { size: letter landscape; margin: 0; }
+        
+        /* GUI CONTROLES FLOTANTES IMAGEN */
+        .img-controls-overlay {
+            position: absolute;
+            top: 10px; right: 10px;
+            display: none !important; gap: 8px; z-index: 50;
+        }
+        .upload-zone:hover .img-controls-overlay.active, #canvas-exp:hover .img-controls-overlay.active {
+            display: flex !important;
+        }
+        .img-btn { background: rgba(0,0,0,0.6); color: #fff; border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; padding: 6px 12px; font-size: 11px; cursor: pointer; transition: all 0.2s; backdrop-filter: blur(4px); display: flex; align-items: center; gap: 5px; font-weight: 600; }
+        .img-btn:hover { background: rgba(0,0,0,0.8); border-color: #38bdf8; color: #38bdf8; }
+        .img-btn.bg-red:hover { border-color: #ef4444; color: #ef4444; }
+        
+        @media print { .img-controls-overlay { display: none !important; } }
     </style>
 </head>
 <body>
@@ -317,7 +332,7 @@
     <script>
         // --- ZOOM & PAN IMAGES ON HOVER + WHEEL ---
         document.addEventListener('wheel', (e) => {
-            if (e.target.tagName === 'IMG' && e.target.closest('.upload-zone')) {
+            if (e.target.tagName === 'IMG' && (e.target.closest('.upload-zone') || e.target.closest('#canvas-exp'))) {
                 e.preventDefault();
                 const img = e.target;
                 let currentScale = parseFloat(img.dataset.scale || 1);
@@ -333,14 +348,19 @@
             }
         }, {passive: false});
 
-        let isDraggingImg = false, dragTargetImg = null, startX, startY;
+        let isDraggingImg = false, hasPannedImg = false, dragTargetImg = null, startX, startY;
         let startTx = 0, startTy = 0;
         
+        document.addEventListener('dragstart', (e) => {
+            if (e.target.tagName === 'IMG' && (e.target.closest('.upload-zone') || e.target.closest('#canvas-exp'))) {
+                e.preventDefault(); // Evitar native drag and drop fantasma
+            }
+        });
+
         document.addEventListener('mousedown', (e) => {
-            if (e.target.tagName === 'IMG' && e.target.closest('.upload-zone')) {
-                // Prevenir interferencia con otras acciones
-                e.preventDefault(); 
+            if (e.target.tagName === 'IMG' && (e.target.closest('.upload-zone') || e.target.closest('#canvas-exp'))) {
                 isDraggingImg = true; 
+                hasPannedImg = false;
                 dragTargetImg = e.target; 
                 startX = e.clientX; 
                 startY = e.clientY;
@@ -348,10 +368,7 @@
                 
                 startTx = parseFloat(dragTargetImg.dataset.tx || 0);
                 startTy = parseFloat(dragTargetImg.dataset.ty || 0);
-                // Si la imagen trae objectPosition viejo, lo limpiamos para evitar conflictos
-                if (dragTargetImg.style.objectPosition) {
-                    dragTargetImg.style.objectPosition = '';
-                }
+                if (dragTargetImg.style.objectPosition) { dragTargetImg.style.objectPosition = ''; }
             }
         });
         
@@ -366,6 +383,7 @@
         document.addEventListener('mousemove', (e) => {
             if(isDraggingImg && dragTargetImg) {
                 e.preventDefault();
+                hasPannedImg = true;
                 let dx = e.clientX - startX;
                 let dy = e.clientY - startY;
                 
@@ -379,6 +397,16 @@
                 dragTargetImg.style.transform = `translate(${newTx}px, ${newTy}px) scale(${currentScale})`;
             }
         });
+
+        document.addEventListener('click', (e) => {
+            if (hasPannedImg) {
+                if (e.target.tagName === 'IMG' && (e.target.closest('.upload-zone') || e.target.closest('#canvas-exp'))) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    hasPannedImg = false;
+                }
+            }
+        }, true);
 
         // --- SLIDE MANAGER LOGIC ---
         function initPages() {
@@ -546,6 +574,7 @@
                     const img = document.getElementById(imgId);
                     img.src = e.target.result;
                     img.style.display = 'block';
+                    img.style.pointerEvents = 'auto'; // allow dragging and clicking
                     
                     if(img.parentElement.querySelector('.upload-hint')) {
                         img.parentElement.querySelector('.upload-hint').style.display = 'none';
@@ -556,9 +585,59 @@
                     if(imgId === 'img-exp') {
                         document.getElementById('hint-exp').style.display = 'none';
                     }
+                    
+                    // Create floating controls for image replacement and deletion
+                    let controls = img.parentElement.querySelector('.img-controls-overlay');
+                    if (!controls) {
+                        controls = document.createElement('div');
+                        controls.className = 'img-controls-overlay active';
+                        controls.innerHTML = `
+                            <button onclick="event.stopPropagation(); triggerImgUpload(this)" class="img-btn">🔄 Reemplazar</button>
+                            <button onclick="event.stopPropagation(); clearImg(this)" class="img-btn bg-red">🗑️ Eliminar</button>
+                        `;
+                        img.parentElement.appendChild(controls);
+                    } else {
+                        controls.classList.add('active');
+                    }
                 };
                 reader.readAsDataURL(file);
             }
+            // Reset inputFile so same file can trigger change again
+            event.target.value = '';
+        }
+
+        function triggerImgUpload(btn) {
+            const wrapper = btn.closest('.upload-zone') || btn.closest('#canvas-exp');
+            const hint = wrapper.querySelector('.upload-hint');
+            const targetClick = wrapper.getAttribute('onclick');
+            if (targetClick) {
+                // Si la zona madre tiene el onclick (ej. upload-zone)
+                wrapper.click();
+            } else if (hint) {
+                // Si hint tiene el onclick (ej. canvas-exp)
+                hint.click();
+            }
+        }
+
+        function clearImg(btn) {
+            const wrapper = btn.closest('.upload-zone') || btn.closest('#canvas-exp');
+            const img = wrapper.querySelector('img');
+            img.src = '';
+            img.style.display = 'none';
+            img.style.transform = '';
+            img.dataset.tx = 0; img.dataset.ty = 0; img.dataset.scale = 1;
+            
+            btn.parentElement.classList.remove('active'); // Hide controls
+            
+            if(wrapper.querySelector('.upload-hint')) {
+                wrapper.querySelector('.upload-hint').style.display = 'block';
+            }
+            if(wrapper.id === 'canvas-exp') {
+                const hintExp = document.getElementById('hint-exp');
+                if(hintExp) hintExp.style.display = 'block';
+            }
+            const btnMontaje = wrapper.parentElement.querySelector('.btn-cargar-montaje');
+            if(btnMontaje) btnMontaje.style.display = 'block';
         }
 
         // (Anterior Paneo de Montaje removido ya que el nuevo sistema lo engloba todo con object-position)
